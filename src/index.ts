@@ -7,6 +7,12 @@ import fs from 'fs-extra'
 import mm from 'micromatch'
 import prompts from 'prompts'
 import { findUp } from 'find-up'
+import {
+  getPackageInfo,
+  importModule,
+  isPackageExists,
+  resolveModule,
+} from 'local-pkg'
 
 // @ts-expect-error missing types
 import launch from 'launch-editor'
@@ -19,15 +25,17 @@ export interface StartPatchOptions {
   yes?: boolean
   sourceDir?: string
   build?: boolean
+  overwrite?: boolean
   pnpmOptions?: string[]
 }
 
 export async function startPatch(options: StartPatchOptions) {
-  const {
+  let {
     name,
     sourceDir,
     yes,
     build,
+    overwrite,
     pnpmOptions = [],
   } = options
 
@@ -39,6 +47,16 @@ export async function startPatch(options: StartPatchOptions) {
   const editDir = join(cwd, `node_modules/.patch-edits/patch_edit_${name.replace(/\//g, '+')}_${nanoid()}`)
 
   await execa('pnpm', ['patch', ...pnpmOptions, '--edit-dir', editDir, name], { stdio: 'inherit', cwd })
+
+  if (overwrite) {
+    if (!isPackageExists(name)) {
+      console.log(c.yellow(`\n${name} is not founded, skipping overwrite`))
+    }
+    console.log(c.blue('\nOverwriting package directly without creating a patch'))
+    const { rootPath } = (await getPackageInfo(name))!
+    const relativePath = relative(rootPath, cwd)
+    sourceDir = relativePath
+  }
 
   if (!sourceDir) {
     await launch(editDir)
