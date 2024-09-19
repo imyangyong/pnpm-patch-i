@@ -7,12 +7,7 @@ import fs from 'fs-extra'
 import mm from 'micromatch'
 import prompts from 'prompts'
 import { findUp } from 'find-up'
-import {
-  getPackageInfo,
-  importModule,
-  isPackageExists,
-  resolveModule,
-} from 'local-pkg'
+import { getPackageInfo, isPackageExists } from 'local-pkg'
 
 // @ts-expect-error missing types
 import launch from 'launch-editor'
@@ -44,17 +39,20 @@ export async function startPatch(options: StartPatchOptions) {
     throw new Error('Failed to locate pnpm-lock.yaml')
   const cwd = dirname(lockfile)
 
-  const editDir = join(cwd, `node_modules/.patch-edits/patch_edit_${name.replace(/\//g, '+')}_${nanoid()}`)
+  if (!isPackageExists(name)) {
+    console.log(c.yellow(`\n${name} is not founded, skipping patching...`))
+    return
+  }
 
-  await execa('pnpm', ['patch', ...pnpmOptions, '--edit-dir', editDir, name], { stdio: 'inherit', cwd })
+  const { rootPath, version } = (await getPackageInfo(name))!
+
+  const editDir = join(cwd, `node_modules/.patch-edits/${name.replace(/\//g, '+')}_${nanoid()}`)
+
+  await execa('pnpm', ['patch', ...pnpmOptions, '--edit-dir', editDir, `${name}@${version}`], { stdio: 'inherit', cwd })
 
   if (overwrite) {
-    if (!isPackageExists(name)) {
-      console.log(c.yellow(`\n${name} is not founded, skipping overwrite`))
-    }
     console.log(c.blue('\nOverwriting package directly without creating a patch'))
-    const { rootPath } = (await getPackageInfo(name))!
-    const relativePath = relative(rootPath, cwd)
+    const relativePath = relative(cwd, rootPath)
     sourceDir = relativePath
   }
 
